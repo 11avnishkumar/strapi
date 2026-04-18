@@ -114,7 +114,6 @@ export default {
       state: { userAbility, user },
       request: { body, files: { files } = {} },
     } = ctx;
-
     const uploadService = getService('upload');
     const pm = strapi.service('admin::permission').createPermissionsManager({
       ability: userAbility,

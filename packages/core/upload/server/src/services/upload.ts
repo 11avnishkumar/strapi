@@ -144,7 +144,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
       throw new ApplicationError('File name contains invalid characters');
     }
 
-    const entity: Omit<UploadableFile, 'getStream'> = {
+    const entity: Omit<UploadableFile, 'getStream'> & { destination?: string } = {
       name: usedName,
       alternativeText: fileInfo.alternativeText,
       caption: fileInfo.caption,
@@ -156,7 +156,10 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
       mime: type,
       size: bytesToKbytes(size),
       sizeInBytes: size,
+      destination: fileInfo.destination
     };
+
+
 
     const { refId, ref, field } = metas;
 
@@ -245,7 +248,6 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
 
     try {
       const { fileInfo, ...metas } = data;
-
       const fileArray = Array.isArray(files) ? files : [files];
       const fileInfoArray = Array.isArray(fileInfo) ? fileInfo : [fileInfo];
 

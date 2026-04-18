@@ -81,4 +81,5 @@ export type FileInfo = {
   caption?: string | null;
   focalPoint?: FocalPoint | null;
   folder?: number;
+  destination?: string;
 };

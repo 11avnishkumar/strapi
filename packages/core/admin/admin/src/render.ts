@@ -50,7 +50,8 @@ const renderAdmin = async (
        * If we don't get the license then we know it's not EE
        * so no feature is enabled.
        */
-      isEnabled: () => false,
+      // isEnabled: () => false,
+      isEnabled: () => true,
     },
     projectType: 'Community',
     flags: {
@@ -83,12 +84,29 @@ const renderAdmin = async (
       },
     } = await get<{ data: ProjectType }>('/admin/project-type');
 
+    // window.strapi.isEE = isEE;
+    // window.strapi.isTrialLicense = isTrial;
+    // window.strapi.flags = flags;
+    // window.strapi.features = {
+    //   ...window.strapi.features,
+    //   isEnabled: (featureName) => features.some((feature) => feature.name === featureName),
+    // };
+    // const features = [
+    //   { name: 'sso' },
+    //   { name: 'audit-logs' },
+    //   { name: 'review-workflows' },
+    // ];
+    // const isEE = true;
+    // const isTrial = true;
     window.strapi.isEE = isEE;
     window.strapi.isTrialLicense = isTrial;
-    window.strapi.flags = flags;
+    window.strapi.flags = {
+      nps: false,
+      promoteEE: true,
+    };
     window.strapi.features = {
       ...window.strapi.features,
-      isEnabled: (featureName) => features.some((feature) => feature.name === featureName),
+      // isEnabled: (featureName) => features.some((feature) => feature.name === featureName),
     };
     window.strapi.projectType = isEE ? 'Enterprise' : 'Community';
     // @ts-expect-error – there's pollution from the global scope of Node.

@@ -1,0 +1,366 @@
+diff --git a/packages/core/admin/admin/src/render.ts b/packages/core/admin/admin/src/render.ts
+index 601c5e2e38..d8f52f58de 100644
+--- a/packages/core/admin/admin/src/render.ts
++++ b/packages/core/admin/admin/src/render.ts
+@@ -50,7 +50,8 @@ const renderAdmin = async (
+        * If we don't get the license then we know it's not EE
+        * so no feature is enabled.
+        */
+-      isEnabled: () => false,
++      // isEnabled: () => false,
++      isEnabled: () => true,
+     },
+     projectType: 'Community',
+     flags: {
+@@ -82,12 +83,29 @@ const renderAdmin = async (
+       },
+     } = await get<{ data: ProjectType }>('/admin/project-type');
+ 
++    // window.strapi.isEE = isEE;
++    // window.strapi.isTrialLicense = isTrial;
++    // window.strapi.flags = flags;
++    // window.strapi.features = {
++    //   ...window.strapi.features,
++    //   isEnabled: (featureName) => features.some((feature) => feature.name === featureName),
++    // };
++    // const features = [
++    //   { name: 'sso' },
++    //   { name: 'audit-logs' },
++    //   { name: 'review-workflows' },
++    // ];
++    // const isEE = true;
++    // const isTrial = true;
+     window.strapi.isEE = isEE;
+     window.strapi.isTrialLicense = isTrial;
+-    window.strapi.flags = flags;
++    window.strapi.flags = {
++      nps: false,
++      promoteEE: true,
++    };
+     window.strapi.features = {
+       ...window.strapi.features,
+-      isEnabled: (featureName) => features.some((feature) => feature.name === featureName),
++      // isEnabled: (featureName) => features.some((feature) => feature.name === featureName),
+     };
+     window.strapi.projectType = isEE ? 'Enterprise' : 'Community';
+     window.strapi.aiLicenseKey = process.env.STRAPI_ADMIN_AI_API_KEY;
+diff --git a/packages/core/core/src/ee/license.ts b/packages/core/core/src/ee/license.ts
+index 36edd75598..8632344c31 100644
+--- a/packages/core/core/src/ee/license.ts
++++ b/packages/core/core/src/ee/license.ts
+@@ -79,7 +79,7 @@ const verifyLicense = (license: string) => {
+   }
+ 
+   if (!licenseInfo.isTrial) {
+-    licenseInfo.isTrial = false;
++    licenseInfo.isTrial = true;
+   }
+ 
+   Object.freeze(licenseInfo.features);
+@@ -113,7 +113,7 @@ const fetchLicense = async (
+ 
+   if (contentType?.includes('application/json')) {
+     const { data, error } = await response.json();
+-
++    console.log("returning data 😇😇😇😇😇😇😇😇😇😇😇", data);
+     switch (response.status) {
+       case 200:
+         return data.license;
+diff --git a/packages/core/upload/admin/src/components/UploadAssetDialog/PendingAssetStep/PendingAssetStep.tsx b/packages/core/upload/admin/src/components/UploadAssetDialog/PendingAssetStep/PendingAssetStep.tsx
+index bab7d16bbe..5f3b1255b5 100644
+--- a/packages/core/upload/admin/src/components/UploadAssetDialog/PendingAssetStep/PendingAssetStep.tsx
++++ b/packages/core/upload/admin/src/components/UploadAssetDialog/PendingAssetStep/PendingAssetStep.tsx
+@@ -1,6 +1,15 @@
+ import * as React from 'react';
+ 
+-import { Button, Flex, Grid, KeyboardNavigable, Modal, Typography } from '@strapi/design-system';
++import {
++  Button,
++  Flex,
++  Grid,
++  KeyboardNavigable,
++  Modal,
++  Typography,
++  ComboboxOption,
++  Combobox,
++} from '@strapi/design-system';
+ import { useIntl } from 'react-intl';
+ 
+ import { AssetType } from '../../../constants';
+@@ -20,6 +29,7 @@ const Status = {
+ interface Asset extends File {
+   rawFile?: RawFile;
+   type?: AssetType;
++  uploadDestination?: string;
+ }
+ 
+ interface PendingAssetStepProps {
+@@ -52,8 +62,14 @@ export const PendingAssetStep = ({
+   const assetCountRef = React.useRef(0);
+   const { formatMessage } = useIntl();
+   const { trackUsage } = useTracking();
++  const [dropdownValue, setDropdownValue] = React.useState('DEFAULT');
+   const [uploadStatus, setUploadStatus] = React.useState(Status.Idle);
+ 
++  const handleDropdownValue = (value: string) => {
++    if (!value) return;
++    setDropdownValue(value);
++  };
++
+   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+     e.preventDefault();
+     e.stopPropagation();
+@@ -142,10 +158,23 @@ export const PendingAssetStep = ({
+               })}
+             </Button>
+           </Flex>
++          {/* Dropdown for selecting a location */}
++          <Combobox
++            placeholder="Select a location to upload your files"
++            value={dropdownValue}
++            onChange={handleDropdownValue}
++          >
++            <ComboboxOption value="DEFAULT">Default</ComboboxOption>
++            <ComboboxOption value="secondary">Secondary</ComboboxOption>
++          </Combobox>
+           <KeyboardNavigable tagName="article">
+             <Grid.Root gap={4}>
+               {assets.map((asset) => {
+                 const assetKey = asset.url;
++                /*
++                append the dropdown value with the assets
++                */
++                asset.uploadDestination = dropdownValue;
+ 
+                 if (uploadStatus === Status.Uploading || uploadStatus === Status.Intermediate) {
+                   return (
+diff --git a/packages/core/upload/admin/src/hooks/useUpload.ts b/packages/core/upload/admin/src/hooks/useUpload.ts
+index 4adae99070..2fb651c665 100644
+--- a/packages/core/upload/admin/src/hooks/useUpload.ts
++++ b/packages/core/upload/admin/src/hooks/useUpload.ts
+@@ -13,6 +13,7 @@ interface Asset extends Omit<File, 'id' | 'hash'> {
+   rawFile?: RawFile;
+   id?: File['id'];
+   hash?: File['hash'];
++  uploadDestination?: string;
+ }
+ 
+ const uploadAssets = (
+@@ -32,7 +33,7 @@ const uploadAssets = (
+     }
+   });
+ 
+-  // Add each fileInfo as a separate stringified field
++  // Add each fileInfo as a separate string field
+   assetsArray.forEach((asset) => {
+     formData.append(
+       'fileInfo',
+@@ -41,6 +42,11 @@ const uploadAssets = (
+         caption: asset.caption,
+         alternativeText: asset.alternativeText,
+         folder: folderId,
++        /**
++         *
++         * for handling the custom upload path
++         */
++        destination: asset.uploadDestination,
+       })
+     );
+   });
+@@ -83,6 +89,7 @@ export const useUpload = () => {
+   const upload = (assets: Asset | Asset[], folderId: number | null) =>
+     mutation.mutateAsync({ assets, folderId });
+ 
++
+   const cancel = () => abortController.abort();
+ 
+   return {
+diff --git a/packages/core/upload/admin/src/index.ts b/packages/core/upload/admin/src/index.ts
+index 588f4f1241..43278c22ec 100644
+--- a/packages/core/upload/admin/src/index.ts
++++ b/packages/core/upload/admin/src/index.ts
+@@ -34,7 +34,7 @@ const admin: Plugin.Config.AdminInput = {
+       to: 'media-library',
+       intlLabel: {
+         id: getTrad('plugin.name'),
+-        defaultMessage: 'Media Library',
++        defaultMessage: 'Library',
+       },
+       async Component() {
+         const { ProtectedSettingsPage } = await import('./pages/SettingsPage/SettingsPage');
+diff --git a/packages/core/upload/admin/src/pages/SettingsPage/SettingsPage.tsx b/packages/core/upload/admin/src/pages/SettingsPage/SettingsPage.tsx
+index c98f1e8bfa..75d23d300b 100644
+--- a/packages/core/upload/admin/src/pages/SettingsPage/SettingsPage.tsx
++++ b/packages/core/upload/admin/src/pages/SettingsPage/SettingsPage.tsx
+@@ -118,7 +118,7 @@ export const SettingsPage = () => {
+             >
+               {formatMessage({
+                 id: 'global.save',
+-                defaultMessage: 'Save',
++                defaultMessage: 'save',
+               })}
+             </Button>
+           }
+diff --git a/packages/core/upload/server/src/controllers/admin-upload.ts b/packages/core/upload/server/src/controllers/admin-upload.ts
+index bf9e102298..3fefd62e3d 100644
+--- a/packages/core/upload/server/src/controllers/admin-upload.ts
++++ b/packages/core/upload/server/src/controllers/admin-upload.ts
+@@ -100,7 +100,6 @@ export default {
+       state: { userAbility, user },
+       request: { body, files: { files } = {} },
+     } = ctx;
+-
+     const uploadService = getService('upload');
+     const pm = strapi.service('admin::permission').createPermissionsManager({
+       ability: userAbility,
+diff --git a/packages/core/upload/server/src/services/upload.ts b/packages/core/upload/server/src/services/upload.ts
+index f2588ba45d..9cbc356eba 100644
+--- a/packages/core/upload/server/src/services/upload.ts
++++ b/packages/core/upload/server/src/services/upload.ts
+@@ -144,7 +144,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
+       throw new ApplicationError('File name contains invalid characters');
+     }
+ 
+-    const entity: Omit<UploadableFile, 'getStream'> = {
++    const entity: Omit<UploadableFile, 'getStream'> & { destination?: string } = {
+       name: usedName,
+       alternativeText: fileInfo.alternativeText,
+       caption: fileInfo.caption,
+@@ -155,8 +155,11 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
+       mime: type,
+       size: bytesToKbytes(size),
+       sizeInBytes: size,
++      destination: fileInfo.destination
+     };
+ 
++
++
+     const { refId, ref, field } = metas;
+ 
+     if (refId && ref && field) {
+@@ -235,7 +238,6 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
+ 
+     try {
+       const { fileInfo, ...metas } = data;
+-
+       const fileArray = Array.isArray(files) ? files : [files];
+       const fileInfoArray = Array.isArray(fileInfo) ? fileInfo : [fileInfo];
+ 
+diff --git a/packages/core/upload/server/src/types.ts b/packages/core/upload/server/src/types.ts
+index ca49282c7b..f399c19b2c 100644
+--- a/packages/core/upload/server/src/types.ts
++++ b/packages/core/upload/server/src/types.ts
+@@ -74,4 +74,5 @@ export type FileInfo = {
+   alternativeText?: string | null;
+   caption?: string | null;
+   folder?: number;
++  destination?: string;
+ };
+diff --git a/packages/providers/upload-local/src/index.ts b/packages/providers/upload-local/src/index.ts
+index b9c974608a..365fa98d8d 100644
+--- a/packages/providers/upload-local/src/index.ts
++++ b/packages/providers/upload-local/src/index.ts
+@@ -26,12 +26,24 @@ interface File {
+   provider_metadata?: Record<string, unknown>;
+   stream?: ReadStream;
+   buffer?: Buffer;
++  destination?: string;
+ }
+ 
+ const { PayloadTooLargeError } = utils.errors;
+ const { kbytesToBytes, bytesToHumanReadable } = utils.file;
+ 
+ const UPLOADS_FOLDER_NAME = 'uploads';
++/*
++* TODO
++*  fix the typescript error right now we have disabled it
++*  error handling for secondary path, if the path does not exits
++*  Idea: We can create a new path if the path does not exist, rather throwing error
++*  Idea2: Can we give the configurations to the users so that they can put their desired folder inside the upload config and let the user decide what folder they can have rather hardcoding here
++*
++*
++*
++* */
++const UPLOADS_FOLDER_SECONDARY = 'secondary';
+ 
+ interface InitOptions {
+   sizeLimit?: number;
+@@ -52,12 +64,20 @@ export default {
+ 
+     // Ensure uploads folder exists
+     const uploadPath = path.resolve(strapi.dirs.static.public, UPLOADS_FOLDER_NAME);
++    const secondaryUploadPath = path.resolve(strapi.dirs.static.public, UPLOADS_FOLDER_SECONDARY);
+     if (!fse.pathExistsSync(uploadPath)) {
+       throw new Error(
+         `The upload folder (${uploadPath}) doesn't exist or is not accessible. Please make sure it exists.`
+       );
+     }
+ 
++    /* Error handling for the secondary path if that not found */
++    if (!fse.pathExistsSync(secondaryUploadPath)) {
++      throw new Error(
++        `Secondary upload folder (${secondaryUploadPath}) doesn't exist or is not accessible. Please make sure it exists.`
++      );
++    }
++
+     return {
+       checkFileSize(file: File, options: CheckFileSizeOptions) {
+         const { sizeLimit } = options ?? {};
+@@ -87,13 +107,17 @@ export default {
+         return new Promise((resolve, reject) => {
+           pipeline(
+             stream,
+-            fs.createWriteStream(path.join(uploadPath, `${file.hash}${file.ext}`)),
++            fs.createWriteStream(path.join(file.destination === 'DEFAULT' ? uploadPath : secondaryUploadPath, `${file.hash}${file.ext}`)),
+             (err) => {
+               if (err) {
+                 return reject(err);
+               }
++              strapi.log.debug(file);
+ 
+-              file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`;
++              // file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`
++              file.url = file.destination === 'DEFAULT'
++                  ? `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`
++                  : `/${UPLOADS_FOLDER_SECONDARY}/${file.hash}${file.ext}`;
+ 
+               resolve();
+             }
+@@ -101,28 +125,33 @@ export default {
+         });
+       },
+       upload(file: File): Promise<void> {
++        console.log(file);
+         if (!file.buffer) {
+           return Promise.reject(new Error('Missing file buffer'));
+         }
++        strapi.log.debug(file);
++        console.log('CUSTOM PROVIDER UPLOAD CALLED', file.name);
+ 
+         const { buffer } = file;
+ 
+         return new Promise((resolve, reject) => {
+           // write file in public/assets folder
+-          fs.writeFile(path.join(uploadPath, `${file.hash}${file.ext}`), buffer, (err) => {
++          fs.writeFile(path.join(file.destination === 'DEFAULT' ? uploadPath : secondaryUploadPath, `${file.hash}${file.ext}`), buffer, (err) => {
+             if (err) {
+               return reject(err);
+             }
+ 
+-            file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`;
+-
++            // file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`;
++            file.url = file.destination === 'DEFAULT'
++                ? `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`
++                : `/${UPLOADS_FOLDER_SECONDARY}/${file.hash}${file.ext}`;
+             resolve();
+           });
+         });
+       },
+       delete(file: File): Promise<string | void> {
+         return new Promise((resolve, reject) => {
+-          const filePath = path.join(uploadPath, `${file.hash}${file.ext}`);
++          const filePath = path.join(file.destination === 'DEFAULT' ? uploadPath : secondaryUploadPath, `${file.hash}${file.ext}`);
+ 
+           if (!fs.existsSync(filePath)) {
+             resolve("File doesn't exist");

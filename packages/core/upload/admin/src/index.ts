@@ -65,7 +65,7 @@ const admin: Plugin.Config.AdminInput = {
       to: 'media-library',
       intlLabel: {
         id: getTrad('plugin.name'),
-        defaultMessage: 'Media Library',
+        defaultMessage: 'Library',
       },
       async Component() {
         const { ProtectedSettingsPage } = await import('./pages/SettingsPage/SettingsPage');

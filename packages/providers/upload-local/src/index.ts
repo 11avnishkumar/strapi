@@ -26,12 +26,24 @@ interface File {
   provider_metadata?: Record<string, unknown>;
   stream?: ReadStream;
   buffer?: Buffer;
+  destination?: string;
 }
 
 const { PayloadTooLargeError } = utils.errors;
 const { kbytesToBytes, bytesToHumanReadable } = utils.file;
 
 const UPLOADS_FOLDER_NAME = 'uploads';
+/*
+* TODO
+*  fix the typescript error right now we have disabled it
+*  error handling for secondary path, if the path does not exits
+*  Idea: We can create a new path if the path does not exist, rather throwing error
+*  Idea2: Can we give the configurations to the users so that they can put their desired folder inside the upload config and let the user decide what folder they can have rather hardcoding here
+*
+*
+*
+* */
+const UPLOADS_FOLDER_SECONDARY = 'secondary';
 
 interface InitOptions {
   sizeLimit?: number;
@@ -52,9 +64,17 @@ export default {
 
     // Ensure uploads folder exists
     const uploadPath = path.resolve(strapi.dirs.static.public, UPLOADS_FOLDER_NAME);
+    const secondaryUploadPath = path.resolve(strapi.dirs.static.public, UPLOADS_FOLDER_SECONDARY);
     if (!fse.pathExistsSync(uploadPath)) {
       throw new Error(
         `The upload folder (${uploadPath}) doesn't exist or is not accessible. Please make sure it exists.`
+      );
+    }
+
+    /* Error handling for the secondary path if that not found */
+    if (!fse.pathExistsSync(secondaryUploadPath)) {
+      throw new Error(
+        `Secondary upload folder (${secondaryUploadPath}) doesn't exist or is not accessible. Please make sure it exists.`
       );
     }
 
@@ -87,13 +107,17 @@ export default {
         return new Promise((resolve, reject) => {
           pipeline(
             stream,
-            fs.createWriteStream(path.join(uploadPath, `${file.hash}${file.ext}`)),
+            fs.createWriteStream(path.join(file.destination === 'DEFAULT' ? uploadPath : secondaryUploadPath, `${file.hash}${file.ext}`)),
             (err) => {
               if (err) {
                 return reject(err);
               }
+              strapi.log.debug(file);
 
-              file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`;
+              // file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`
+              file.url = file.destination === 'DEFAULT'
+                  ? `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`
+                  : `/${UPLOADS_FOLDER_SECONDARY}/${file.hash}${file.ext}`;
 
               resolve();
             }
@@ -101,28 +125,33 @@ export default {
         });
       },
       upload(file: File): Promise<void> {
+        console.log(file);
         if (!file.buffer) {
           return Promise.reject(new Error('Missing file buffer'));
         }
+        strapi.log.debug(file);
+        console.log('CUSTOM PROVIDER UPLOAD CALLED', file.name);
 
         const { buffer } = file;
 
         return new Promise((resolve, reject) => {
           // write file in public/assets folder
-          fs.writeFile(path.join(uploadPath, `${file.hash}${file.ext}`), buffer, (err) => {
+          fs.writeFile(path.join(file.destination === 'DEFAULT' ? uploadPath : secondaryUploadPath, `${file.hash}${file.ext}`), buffer, (err) => {
             if (err) {
               return reject(err);
             }
 
-            file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`;
-
+            // file.url = `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`;
+            file.url = file.destination === 'DEFAULT'
+                ? `/${UPLOADS_FOLDER_NAME}/${file.hash}${file.ext}`
+                : `/${UPLOADS_FOLDER_SECONDARY}/${file.hash}${file.ext}`;
             resolve();
           });
         });
       },
       delete(file: File): Promise<string | void> {
         return new Promise((resolve, reject) => {
-          const filePath = path.join(uploadPath, `${file.hash}${file.ext}`);
+          const filePath = path.join(file.destination === 'DEFAULT' ? uploadPath : secondaryUploadPath, `${file.hash}${file.ext}`);
 
           if (!fs.existsSync(filePath)) {
             resolve("File doesn't exist");

@@ -13,6 +13,7 @@ interface Asset extends Omit<File, 'id' | 'hash'> {
   rawFile?: RawFile;
   id?: File['id'];
   hash?: File['hash'];
+  uploadDestination?: string;
 }
 
 const uploadAssets = (
@@ -32,7 +33,7 @@ const uploadAssets = (
     }
   });
 
-  // Add each fileInfo as a separate stringified field
+  // Add each fileInfo as a separate string field
   assetsArray.forEach((asset) => {
     formData.append(
       'fileInfo',
@@ -41,6 +42,11 @@ const uploadAssets = (
         caption: asset.caption,
         alternativeText: asset.alternativeText,
         folder: folderId,
+        /**
+         *
+         * for handling the custom upload path
+         */
+        destination: asset.uploadDestination,
       })
     );
   });
@@ -82,6 +88,7 @@ export const useUpload = () => {
 
   const upload = (assets: Asset | Asset[], folderId: number | null) =>
     mutation.mutateAsync({ assets, folderId });
+
 
   const cancel = () => abortController.abort();
 

@@ -1,6 +1,15 @@
 import * as React from 'react';
 
-import { Button, Flex, Grid, KeyboardNavigable, Modal, Typography } from '@strapi/design-system';
+import {
+  Button,
+  Flex,
+  Grid,
+  KeyboardNavigable,
+  Modal,
+  Typography,
+  ComboboxOption,
+  Combobox,
+} from '@strapi/design-system';
 import { useIntl } from 'react-intl';
 
 import { AssetType } from '../../../enums';
@@ -20,6 +29,7 @@ const Status = {
 interface Asset extends File {
   rawFile?: RawFile;
   type?: AssetType;
+  uploadDestination?: string;
 }
 
 interface PendingAssetStepProps {
@@ -52,7 +62,13 @@ export const PendingAssetStep = ({
   const assetCountRef = React.useRef(0);
   const { formatMessage } = useIntl();
   const { trackUsage } = useTracking();
+  const [dropdownValue, setDropdownValue] = React.useState('DEFAULT');
   const [uploadStatus, setUploadStatus] = React.useState(Status.Idle);
+
+  const handleDropdownValue = (value: string) => {
+    if (!value) return;
+    setDropdownValue(value);
+  };
 
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -142,10 +158,23 @@ export const PendingAssetStep = ({
               })}
             </Button>
           </Flex>
+          {/* Dropdown for selecting a location */}
+          <Combobox
+            placeholder="Select a location to upload your files"
+            value={dropdownValue}
+            onChange={handleDropdownValue}
+          >
+            <ComboboxOption value="DEFAULT">Default</ComboboxOption>
+            <ComboboxOption value="secondary">Secondary</ComboboxOption>
+          </Combobox>
           <KeyboardNavigable tagName="article">
             <Grid.Root gap={4}>
               {assets.map((asset) => {
                 const assetKey = asset.url;
+                /*
+                append the dropdown value with the assets
+                */
+                asset.uploadDestination = dropdownValue;
 
                 if (uploadStatus === Status.Uploading || uploadStatus === Status.Intermediate) {
                   return (

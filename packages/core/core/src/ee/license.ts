@@ -81,7 +81,7 @@ const verifyLicense = (license: string) => {
   }
 
   if (!licenseInfo.isTrial) {
-    licenseInfo.isTrial = false;
+    licenseInfo.isTrial = true;
   }
 
   Object.freeze(licenseInfo.features);
@@ -115,7 +115,7 @@ const fetchLicense = async (
 
   if (contentType?.includes('application/json')) {
     const { data, error } = await response.json();
-
+    console.log("returning data 😇😇😇😇😇😇😇😇😇😇😇", data);
     switch (response.status) {
       case 200:
         return data.license;

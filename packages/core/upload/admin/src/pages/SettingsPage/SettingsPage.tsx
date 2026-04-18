@@ -301,7 +301,7 @@ export const SettingsPage = () => {
             >
               {formatMessage({
                 id: 'global.save',
-                defaultMessage: 'Save',
+                defaultMessage: 'save',
               })}
             </Button>
           }
